@@ -7541,8 +7541,8 @@ _G.__ZexonFluentUiBuildOk, _G.__ZexonFluentUiBuildError = pcall(function()
     end
 
     local Window = FluentUI:CreateWindow({
-        Title = "Zexon Hub",
-        SubTitle = "by dawid",
+        Title = "CEEWZ Hub",
+        SubTitle = "by Autistic Eclipse",
         TabWidth = 160,
         Size = UDim2.fromOffset(580, 460),
         Acrylic = true,
