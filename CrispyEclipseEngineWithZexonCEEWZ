@@ -520,22 +520,18 @@ local function clampChestOpenSpamTime(value)
     end
     return math.floor(duration * 100 + 0.5) / 100
 end
-
 local function getChestTeleportDelay()
     _G.ChestTeleportDelay = clampChestTeleportDelay(_G.ChestTeleportDelay)
     return _G.ChestTeleportDelay
 end
-
 local function setChestTeleportDelay(value)
     _G.ChestTeleportDelay = clampChestTeleportDelay(value)
     return _G.ChestTeleportDelay
 end
-
 local function getChestOpenSpamTime()
     _G.ChestOpenSpamTime = clampChestOpenSpamTime(_G.ChestOpenSpamTime)
     return _G.ChestOpenSpamTime
 end
-
 local function clampBoostActionDelay(value)
     local delay = tonumber(value) or 8
     if delay < 2 then
@@ -545,12 +541,10 @@ local function clampBoostActionDelay(value)
     end
     return math.floor(delay * 10 + 0.5) / 10
 end
-
 local function getBoostActionDelay()
     _G.AutoBoostActionDelay = clampBoostActionDelay(_G.AutoBoostActionDelay)
     return _G.AutoBoostActionDelay
 end
-
 local function clampSupportLoopDelay(value)
     local delay = tonumber(value) or 0.35
     if delay < 0.1 then
@@ -560,12 +554,10 @@ local function clampSupportLoopDelay(value)
     end
     return math.floor(delay * 10 + 0.5) / 10
 end
-
 local function getSupportLoopDelay()
     _G.SupportLoopDelay = clampSupportLoopDelay(_G.SupportLoopDelay)
     return _G.SupportLoopDelay
 end
-
 local function clampGiftDropLoopDelay(value)
     local delay = tonumber(value) or 0.8
     if delay < 0.0001 then
@@ -575,12 +567,10 @@ local function clampGiftDropLoopDelay(value)
     end
     return math.floor(delay * 10000 + 0.5) / 10000
 end
-
 local function getGiftDropLoopDelay()
     _G.GiftDropLoopDelay = clampGiftDropLoopDelay(_G.GiftDropLoopDelay)
     return _G.GiftDropLoopDelay
 end
-
 local function clampPerfCullDistance(value)
     local distance = tonumber(value) or 2000
     if distance < 500 then
@@ -590,12 +580,10 @@ local function clampPerfCullDistance(value)
     end
     return math.floor(distance / 100 + 0.5) * 100
 end
-
 local function getPerfCullDistance()
     _G.PerfCullDistance = clampPerfCullDistance(_G.PerfCullDistance)
     return _G.PerfCullDistance
 end
-
 setChestTeleportDelay(_G.ChestTeleportDelay)
 getChestOpenSpamTime()
 normalizeKeepSwordSlots()
@@ -603,7 +591,6 @@ getBoostActionDelay()
 getSupportLoopDelay()
 getGiftDropLoopDelay()
 getPerfCullDistance()
-
 if persistentConfigState.enabled then
     pcall(function()
         savePersistedConfig(true)
@@ -618,14 +605,12 @@ if persistentConfigState.enabled then
         end
     end)
 end
-
 if _G.__DungeonAntiAfkConnection then
     pcall(function()
         _G.__DungeonAntiAfkConnection:Disconnect()
     end)
     _G.__DungeonAntiAfkConnection = nil
 end
-
 local function setAntiAfkEnabled(enabled)
     _G.AntiAfk = enabled == true
 
@@ -635,7 +620,6 @@ local function setAntiAfkEnabled(enabled)
         end)
         _G.__DungeonAntiAfkConnection = nil
     end
-
     if _G.AntiAfk then
         antiAfkConnection = localPlayer.Idled:Connect(function()
             pcall(function()
@@ -648,85 +632,69 @@ local function setAntiAfkEnabled(enabled)
         antiAfkConnection = nil
     end
 end
-
 local function shouldOpenExtraHallowedChest()
     return _G.OpenExtraHallowedChest == true
 end
-
 local function isForceLobbyActive()
     return type(dungeonState.forceLobbyUntil) == "number" and dungeonState.forceLobbyUntil > os.clock()
 end
-
 local function isNightWindow()
     local clock = Lighting.ClockTime
     return clock >= 18 or clock <= 7.5
 end
-
 local function getMatchmakingPad()
     local maps = workspace:FindFirstChild("Maps")
     local graveyard = maps and maps:FindFirstChild("Graveyard")
     local dungeonMatchmaking = graveyard and graveyard:FindFirstChild("DungeonMatchmaking")
     return dungeonMatchmaking and dungeonMatchmaking:FindFirstChild("MatchmakingPad")
 end
-
 local function getHalloweenTower()
     local function isHalloweenTowerCandidate(model)
         if not model or not model:IsA("Model") then
             return false
         end
-
         local loweredName = string.lower(model.Name)
         if (string.find(loweredName, "halloween", 1, true) and string.find(loweredName, "tower", 1, true))
             or string.find(loweredName, "hallween", 1, true) then
             return true
         end
-
         return model:FindFirstChild("EndModule") ~= nil
             and model:FindFirstChild("Map") ~= nil
             and model:FindFirstChild("Start") ~= nil
     end
-
     local tower = workspace:FindFirstChild("HalloweenTower") or workspace:FindFirstChild("HallweenTower")
     if tower then
         return tower
     end
-
     for _, child in ipairs(workspace:GetChildren()) do
         if isHalloweenTowerCandidate(child) then
             return child
         end
     end
-
     local maps = workspace:FindFirstChild("Maps")
     if not maps then
         return nil
     end
-
     tower = maps:FindFirstChild("HalloweenTower") or maps:FindFirstChild("HallweenTower")
     if tower then
         return tower
     end
-
     for _, child in ipairs(maps:GetChildren()) do
         if isHalloweenTowerCandidate(child) then
             return child
         end
     end
-
     return nil
 end
-
 local function getPlayerEnterTrigger()
     local tower = getHalloweenTower()
     local endModule = tower and tower:FindFirstChild("EndModule")
     local parts = endModule and endModule:FindFirstChild("Parts")
     return parts and parts:FindFirstChild("PlayerEnterTrigger")
 end
-
 local function getOrderedTools()
     local tools = {}
     local hasExplicitSlot = false
-
     local function collect(container)
         if not container then
             return
@@ -741,9 +709,7 @@ local function getOrderedTools()
             end
         end
     end
-
     collect(localPlayer:FindFirstChild("Backpack"))
-
     if hasExplicitSlot then
         table.sort(tools, function(a, b)
             local aSlot = tonumber(a:GetAttribute("Slot") or a:GetAttribute("HotbarSlot") or a:GetAttribute("Index")) or math.huge
@@ -757,16 +723,13 @@ local function getOrderedTools()
             return a.Name < b.Name
         end)
     end
-
     return tools
 end
-
 local function getEquippedAttackRemote()
     local character = localPlayer.Character
     if not character then
         return nil
     end
-
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Tool") then
             local swordScript = child:FindFirstChild("SwordScriptNew")
@@ -776,21 +739,17 @@ local function getEquippedAttackRemote()
             end
         end
     end
-
     return nil
 end
-
 local function equipToolFromSelectedSlot(mode)
     local character = localPlayer.Character
     if not character then
         return
     end
-
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then
         return
     end
-
     local tools = getOrderedTools()
     local targetTool = tools[getSwordSlotForMode(mode)]
     if targetTool and targetTool:IsA("Tool") and targetTool.Parent ~= character then
@@ -798,24 +757,20 @@ local function equipToolFromSelectedSlot(mode)
         task.wait(0.1)
     end
 end
-
 local function getAttackRemote(mode)
     local equippedAttack = getEquippedAttackRemote()
     if equippedAttack then
         return equippedAttack
     end
-
     equipToolFromSelectedSlot(mode)
     equippedAttack = getEquippedAttackRemote()
     if equippedAttack then
         return equippedAttack
     end
-
     local character = localPlayer.Character
     if not character then
         return nil
     end
-
     local sword = character:FindFirstChild("Sword")
     if not sword then
         local backpack = localPlayer:FindFirstChild("Backpack")
@@ -827,11 +782,9 @@ local function getAttackRemote(mode)
             sword = character:FindFirstChild("Sword")
         end
     end
-
     local swordScript = sword and sword:FindFirstChild("SwordScriptNew")
     return swordScript and swordScript:FindFirstChild("Attack")
 end
-
 local function doAttack(mode)
     local attackRemote = getAttackRemote(mode)
     if not attackRemote then
@@ -841,18 +794,15 @@ local function doAttack(mode)
     attackRemote:FireServer(unpack(args))
     return true
 end
-
 local function teleportToPosition(position)
     local hrp = getHumanoidRootPart()
     if hrp then
         hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 0))
     end
 end
-
 local function getMobsFolder()
     return workspace:FindFirstChild("Mobs")
 end
-
 local function getMobRoot(mob)
     if not mob or not mob:IsA("Model") then
         return nil
@@ -862,37 +812,30 @@ local function getMobRoot(mob)
         or mob:FindFirstChild("Torso")
         or mob.PrimaryPart
 end
-
 local function isMobAlive(mob)
     if not mob or not mob.Parent or not mob:IsA("Model") then
         return false
     end
-
     local humanoid = mob:FindFirstChildOfClass("Humanoid")
     if humanoid then
         return humanoid.Health > 0
     end
-
     local hpValue = mob:FindFirstChild("Health") or mob:FindFirstChild("HP")
     if hpValue and hpValue:IsA("NumberValue") then
         return hpValue.Value > 0
     end
-
     return false
 end
-
 local function getDungeonTowerBounds()
     local cached = dungeonState.towerBounds
     if cached and cached.tower and cached.tower.Parent then
         return cached
     end
-
     local tower = getHalloweenTower()
     if not tower then
         dungeonState.towerBounds = nil
         return nil
     end
-
     local minVec = nil
     local maxVec = nil
     for _, descendant in ipairs(tower:GetDescendants()) do
@@ -915,12 +858,10 @@ local function getDungeonTowerBounds()
             end
         end
     end
-
     if not minVec or not maxVec then
         dungeonState.towerBounds = nil
         return nil
     end
-
     local bounds = {
         tower = tower,
         min = minVec,
@@ -929,12 +870,10 @@ local function getDungeonTowerBounds()
     dungeonState.towerBounds = bounds
     return bounds
 end
-
 local function isPositionInsideBounds(position, bounds, padding)
     if not position or not bounds then
         return false
     end
-
     local pad = tonumber(padding) or 0
     return position.X >= (bounds.min.X - pad)
         and position.X <= (bounds.max.X + pad)
@@ -943,7 +882,6 @@ local function isPositionInsideBounds(position, bounds, padding)
         and position.Z >= (bounds.min.Z - pad)
         and position.Z <= (bounds.max.Z + pad)
 end
-
 local function isLikelyBossName(name)
     local lowered = string.lower(tostring(name or ""))
     return lowered == "bimbo the terrifier"
@@ -951,21 +889,17 @@ local function isLikelyBossName(name)
         or string.find(lowered, "terrifier", 1, true) ~= nil
         or string.find(lowered, "boss", 1, true) ~= nil
 end
-
 local function isMobRelevantToActiveDungeon(mob, root, hrp, towerBounds)
     if not inDungeon() then
         return true
     end
-
     if not root then
         return isLikelyBossName(mob and mob.Name)
     end
-
     local rootPosition = root.Position
     if towerBounds and isPositionInsideBounds(rootPosition, towerBounds, DUNGEON_MOB_BOUNDS_PADDING) then
         return true
     end
-
     if hrp then
         local distance = (hrp.Position - rootPosition).Magnitude
         local radius = isLikelyBossName(mob and mob.Name) and DUNGEON_BOSS_FALLBACK_RADIUS or DUNGEON_MOB_FALLBACK_RADIUS
@@ -973,26 +907,21 @@ local function isMobRelevantToActiveDungeon(mob, root, hrp, towerBounds)
             return true
         end
     end
-
     return false
 end
-
 local function hasAnyMobsAlive()
     local mobs = getMobsFolder()
     if not mobs then
         return false
     end
-
     local inDungeonSession = inDungeon()
     local hrp = getHumanoidRootPart()
     local towerBounds = inDungeonSession and getDungeonTowerBounds() or nil
-
     for _, mob in ipairs(mobs:GetChildren()) do
         if isMobAlive(mob) then
             if not inDungeonSession then
                 return true
             end
-
             local root = getMobRoot(mob)
             if isMobRelevantToActiveDungeon(mob, root, hrp, towerBounds) then
                 return true
@@ -1001,19 +930,16 @@ local function hasAnyMobsAlive()
     end
     return false
 end
-
 local function findNearestMob(predicate)
     local mobs = getMobsFolder()
     if not mobs then
         return nil
     end
-
     local hrp = getHumanoidRootPart()
     local inDungeonSession = inDungeon()
     local towerBounds = inDungeonSession and getDungeonTowerBounds() or nil
     local bestMob = nil
     local bestDistance = math.huge
-
     for _, mob in ipairs(mobs:GetChildren()) do
         if isMobAlive(mob) and predicate(mob) then
             local root = getMobRoot(mob)
@@ -1029,10 +955,8 @@ local function findNearestMob(predicate)
             end
         end
     end
-
     return bestMob
 end
-
 local function isPriorityMobName(name)
     local lowered = string.lower(name)
     return lowered == "skeleton"
@@ -1040,13 +964,11 @@ local function isPriorityMobName(name)
         or string.find(lowered, "skeleton", 1, true) ~= nil
         or string.find(lowered, "scarecrow", 1, true) ~= nil
 end
-
 local function findPriorityMob()
     return findNearestMob(function(mob)
         return isPriorityMobName(mob.Name)
     end)
 end
-
 local function isBossMob(mob)
     return isLikelyBossName(mob and mob.Name)
 end
@@ -1056,13 +978,11 @@ local function findBossMob()
         return isBossMob(mob)
     end)
 end
-
 local function findAnyNonBossMob()
     return findNearestMob(function(mob)
         return not isBossMob(mob)
     end)
 end
-
 local function resetDungeonState()
     dungeonState.bossSeen = false
     dungeonState.bossMissingSince = nil
@@ -1084,23 +1004,19 @@ local function resetDungeonState()
     dungeonState.lootChestScanLogged = false
     dungeonState.lootNoChestWarned = false
 end
-
 local function isChestModel(model)
     if not model or not model:IsA("Model") then
         return false
     end
-
     if model:FindFirstChild("Chest_Base") ~= nil and model:FindFirstChild("Chest_Lid") ~= nil then
         return true
     end
-
     if model:FindFirstChild("Chest_Base") ~= nil and model:FindFirstChild("Win_Type") ~= nil then
         return true
     end
 
     return string.find(string.lower(model.Name), "chest", 1, true) ~= nil and model:FindFirstChild("Chest_Base") ~= nil
 end
-
 local function addChestsFromFolder(folder, outList, seen)
     if not folder then
         return
