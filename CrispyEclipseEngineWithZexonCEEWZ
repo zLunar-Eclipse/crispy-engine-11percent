@@ -6,7 +6,6 @@ ReplicatedStorage = game:GetService("ReplicatedStorage")
 VirtualUser = game:GetService("VirtualUser")
 TweenService = game:GetService("TweenService")
 HttpService = game:GetService("HttpService")
-
 localPlayer = Players.LocalPlayer
 if not localPlayer then
     repeat
@@ -14,14 +13,12 @@ if not localPlayer then
         localPlayer = Players.LocalPlayer
     until localPlayer
 end
-
 local persistentConfigState = {
     folderPath = "zexonhub",
     filePath = "zexonhub/settings.json",
     enabled = type(readfile) == "function" and type(writefile) == "function" and type(isfile) == "function",
     lastSerialized = nil
 }
-
 local persistentConfigKeys = {
     "AutoFarm",
     "WorldFarmEnabled",
@@ -64,13 +61,11 @@ local persistentConfigKeys = {
     "PerfCullDistance",
     "ZexonHubVisible"
 }
-
 local function coercePersistedKeepSwordSlots(savedValue)
     local normalized = {}
     if type(savedValue) ~= "table" then
         return normalized
     end
-
     for key, value in pairs(savedValue) do
         local slot = nil
         if value == true then
@@ -83,15 +78,12 @@ local function coercePersistedKeepSwordSlots(savedValue)
             normalized[math.floor(slot)] = true
         end
     end
-
     return normalized
 end
-
 local function applyPersistedConfig(config)
     if type(config) ~= "table" then
         return
     end
-
     for _, key in ipairs(persistentConfigKeys) do
         local value = config[key]
         if value ~= nil then
@@ -107,12 +99,10 @@ local function applyPersistedConfig(config)
         end
     end
 end
-
 local function readPersistedConfig()
     if not persistentConfigState.enabled then
         return nil
     end
-
     local exists = false
     local okExists = pcall(function()
         exists = isfile(persistentConfigState.filePath)
@@ -120,7 +110,6 @@ local function readPersistedConfig()
     if not okExists or not exists then
         return nil
     end
-
     local raw = ""
     local okRead = pcall(function()
         raw = readfile(persistentConfigState.filePath)
@@ -128,7 +117,6 @@ local function readPersistedConfig()
     if not okRead or type(raw) ~= "string" or raw == "" then
         return nil
     end
-
     local decoded = nil
     local okDecode = pcall(function()
         decoded = HttpService:JSONDecode(raw)
@@ -136,13 +124,10 @@ local function readPersistedConfig()
     if not okDecode or type(decoded) ~= "table" then
         return nil
     end
-
     persistentConfigState.lastSerialized = raw
     return decoded
 end
-
 applyPersistedConfig(readPersistedConfig())
-
 playerGui = localPlayer:FindFirstChildOfClass("PlayerGui") or localPlayer:WaitForChild("PlayerGui")
 coreGui = game:GetService("CoreGui")
 
@@ -291,34 +276,28 @@ if type(_G.ZexonHubVisible) ~= "boolean" then
     _G.ZexonHubVisible = true
 end
 _G.__ZexonUseLegacyUI = false
-
 _G.AutoBuyDungeonBoost = _G.AutoBuyAllBoosts
 _G.AutoUseDungeonBoost = _G.AutoUseAllBoosts
-
 if _G.__ZexonPerformanceDescendantConnection then
     pcall(function()
         _G.__ZexonPerformanceDescendantConnection:Disconnect()
     end)
     _G.__ZexonPerformanceDescendantConnection = nil
 end
-
 _G.__ZexonRuntimeToken = (_G.__ZexonRuntimeToken or 0) + 1
 local runtimeToken = _G.__ZexonRuntimeToken
 
 local function isRuntimeActive()
     return _G.__ZexonRuntimeToken == runtimeToken
 end
-
 local function invalidateRuntimeToken()
     if _G.__ZexonRuntimeToken == runtimeToken then
         _G.__ZexonRuntimeToken = runtimeToken + 1
     end
 end
-
 local function makeWeakKeyTable()
     return setmetatable({}, { __mode = "k" })
 end
-
 local function encodePersistedValue(value, depth)
     local valueType = type(value)
     if valueType == "boolean" or valueType == "number" or valueType == "string" then
@@ -327,7 +306,6 @@ local function encodePersistedValue(value, depth)
     if valueType ~= "table" or depth >= 6 then
         return nil
     end
-
     local output = {}
     for key, child in pairs(value) do
         local keyType = type(key)
@@ -340,7 +318,6 @@ local function encodePersistedValue(value, depth)
     end
     return output
 end
-
 local function buildPersistedConfigSnapshot()
     local snapshot = {}
     for _, key in ipairs(persistentConfigKeys) do
@@ -362,12 +339,10 @@ local function buildPersistedConfigSnapshot()
     end
     return snapshot
 end
-
 local function ensurePersistedConfigFolder()
     if type(makefolder) ~= "function" then
         return
     end
-
     if type(isfolder) == "function" then
         local exists = false
         local okExists = pcall(function()
@@ -377,17 +352,14 @@ local function ensurePersistedConfigFolder()
             return
         end
     end
-
     pcall(function()
         makefolder(persistentConfigState.folderPath)
     end)
 end
-
 local function savePersistedConfig(forceWrite)
     if not persistentConfigState.enabled then
         return false
     end
-
     local serialized = nil
     local okEncode = pcall(function()
         serialized = HttpService:JSONEncode(buildPersistedConfigSnapshot())
@@ -395,11 +367,9 @@ local function savePersistedConfig(forceWrite)
     if not okEncode or type(serialized) ~= "string" then
         return false
     end
-
     if forceWrite ~= true and persistentConfigState.lastSerialized == serialized then
         return false
     end
-
     ensurePersistedConfigFolder()
     local okWrite = pcall(function()
         writefile(persistentConfigState.filePath, serialized)
@@ -407,11 +377,9 @@ local function savePersistedConfig(forceWrite)
     if not okWrite then
         return false
     end
-
     persistentConfigState.lastSerialized = serialized
     return true
 end
-
 local loopRunning = false
 local refreshButtonText = function() end
 local antiAfkConnection = nil
@@ -447,16 +415,13 @@ local dungeonState = {
     lootChestScanLogged = false,
     lootNoChestWarned = false
 }
-
 local DUNGEON_LOOT_TIMEOUT = 8
 local DUNGEON_MOB_BOUNDS_PADDING = 220
 local DUNGEON_MOB_FALLBACK_RADIUS = 1200
 local DUNGEON_BOSS_FALLBACK_RADIUS = 5000
-
 local function getCharacter()
     return localPlayer.Character or localPlayer.CharacterAdded:Wait()
 end
-
 local function getHumanoidRootPart()
     local character = localPlayer.Character
     if not character then
@@ -464,11 +429,9 @@ local function getHumanoidRootPart()
     end
     return character:FindFirstChild("HumanoidRootPart")
 end
-
 local function inDungeon()
     return localPlayer:GetAttribute("DungeonSession") == true
 end
-
 local function clampSwordSlot(value, fallback)
     local slot = tonumber(value)
     if slot == nil then
@@ -481,7 +444,6 @@ local function clampSwordSlot(value, fallback)
     end
     return math.floor(slot + 0.5)
 end
-
 local function getSelectedDungeonSwordSlot()
     local slot = clampSwordSlot(_G.DungeonSwordSlot, _G.SwordSlot)
     _G.DungeonSwordSlot = slot
@@ -494,11 +456,9 @@ local function getSelectedMobFarmSwordSlot()
     _G.MobFarmSwordSlot = slot
     return slot
 end
-
 local function getSelectedSwordSlot()
     return getSelectedDungeonSwordSlot()
 end
-
 local function getSwordSlotForMode(mode)
     local normalized = string.lower(tostring(mode or ""))
     if normalized == "mob" or normalized == "mobfarm" or normalized == "world" or normalized == "worldfarm" then
@@ -506,12 +466,10 @@ local function getSwordSlotForMode(mode)
     end
     return getSelectedDungeonSwordSlot()
 end
-
 local function normalizeKeepSwordSlots()
     if type(_G.KeepSwordSlots) ~= "table" then
         _G.KeepSwordSlots = {}
     end
-
     local normalized = {}
     local hasAny = false
     for slot = 1, 10 do
@@ -520,24 +478,19 @@ local function normalizeKeepSwordSlots()
             hasAny = true
         end
     end
-
     if not hasAny then
         normalized[getSelectedSwordSlot()] = true
     end
-
     _G.KeepSwordSlots = normalized
     return _G.KeepSwordSlots
 end
-
 local function isKeepSlotEnabled(slot)
     normalizeKeepSwordSlots()
     return _G.KeepSwordSlots[slot] == true
 end
-
 local function setKeepSlotEnabled(slot, enabled)
     normalizeKeepSwordSlots()
     _G.KeepSwordSlots[slot] = enabled == true
-
     local hasAny = false
     for i = 1, 10 do
         if _G.KeepSwordSlots[i] == true then
@@ -549,7 +502,6 @@ local function setKeepSlotEnabled(slot, enabled)
         _G.KeepSwordSlots[getSelectedSwordSlot()] = true
     end
 end
-
 local function clampChestTeleportDelay(value)
     local delay = tonumber(value) or 1
     if delay < 0.1 then
@@ -559,7 +511,6 @@ local function clampChestTeleportDelay(value)
     end
     return math.floor(delay * 10 + 0.5) / 10
 end
-
 local function clampChestOpenSpamTime(value)
     local duration = tonumber(value) or 0.35
     if duration < 0.1 then
