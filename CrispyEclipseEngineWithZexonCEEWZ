@@ -450,7 +450,6 @@ local function getSelectedDungeonSwordSlot()
     _G.SwordSlot = slot
     return slot
 end
-
 local function getSelectedMobFarmSwordSlot()
     local slot = clampSwordSlot(_G.MobFarmSwordSlot, getSelectedDungeonSwordSlot())
     _G.MobFarmSwordSlot = slot
@@ -595,7 +594,6 @@ if persistentConfigState.enabled then
     pcall(function()
         savePersistedConfig(true)
     end)
-
     task.spawn(function()
         while isRuntimeActive() do
             pcall(function()
@@ -972,7 +970,6 @@ end
 local function isBossMob(mob)
     return isLikelyBossName(mob and mob.Name)
 end
-
 local function findBossMob()
     return findNearestMob(function(mob)
         return isBossMob(mob)
@@ -1014,14 +1011,12 @@ local function isChestModel(model)
     if model:FindFirstChild("Chest_Base") ~= nil and model:FindFirstChild("Win_Type") ~= nil then
         return true
     end
-
     return string.find(string.lower(model.Name), "chest", 1, true) ~= nil and model:FindFirstChild("Chest_Base") ~= nil
 end
 local function addChestsFromFolder(folder, outList, seen)
     if not folder then
         return
     end
-
     for _, child in ipairs(folder:GetChildren()) do
         if isChestModel(child) and not seen[child] then
             seen[child] = true
@@ -1029,24 +1024,19 @@ local function addChestsFromFolder(folder, outList, seen)
         end
     end
 end
-
 local function collectDungeonChests()
     local tower = getHalloweenTower()
     if not tower then
         return {}
     end
-
     local chestList = {}
     local seen = {}
-
     local startModel = tower:FindFirstChild("Start")
     local startChests = startModel and startModel:FindFirstChild("Chests")
     addChestsFromFolder(startChests, chestList, seen)
-
     local endModule = tower:FindFirstChild("EndModule")
     local endChests = endModule and endModule:FindFirstChild("Chests")
     addChestsFromFolder(endChests, chestList, seen)
-
     local map = tower:FindFirstChild("Map")
     local mapFunctionalSection = map and map:FindFirstChild("MapFunctionalSection")
     if mapFunctionalSection then
@@ -1056,23 +1046,19 @@ local function collectDungeonChests()
             end
         end
     end
-
     for _, descendant in ipairs(tower:GetDescendants()) do
         if descendant:IsA("Folder") and descendant.Name == "Chests" then
             addChestsFromFolder(descendant, chestList, seen)
         end
     end
-
     return chestList
 end
-
 local function shouldIgnoreChest(chest)
     if not chest then
         return true
     end
     return string.lower(chest.Name) == "extrahallowedchest" and not shouldOpenExtraHallowedChest()
 end
-
 local function getChestLidPivot(chest)
     local chestLid = chest and chest:FindFirstChild("Chest_Lid")
     if not chestLid or not chestLid:IsA("Model") then
@@ -1086,21 +1072,18 @@ local function getChestLidPivot(chest)
     end
     return nil
 end
-
 local function ensureChestBaseline(chest)
     if not chest or dungeonState.chestBaselines[chest] ~= nil then
         return
     end
     dungeonState.chestBaselines[chest] = getChestLidPivot(chest)
 end
-
 local function getChestPrompts(chest)
     local prompts = {}
     local enabledCount = 0
     if not chest then
         return prompts, enabledCount, 0
     end
-
     for _, descendant in ipairs(chest:GetDescendants()) do
         if descendant:IsA("ProximityPrompt") then
             table.insert(prompts, descendant)
@@ -1109,15 +1092,12 @@ local function getChestPrompts(chest)
             end
         end
     end
-
     return prompts, enabledCount, #prompts
 end
-
 local function hasEnabledChestPrompt(chest)
     local _, enabledCount, promptCount = getChestPrompts(chest)
     return enabledCount > 0, promptCount > 0
 end
-
 local chestOpenStateNames = {
     opened = true,
     open = true,
@@ -1127,12 +1107,10 @@ local chestOpenStateNames = {
     looted = true,
     taken = true
 }
-
 local function hasChestOpenStateFlag(chest)
     if not chest then
         return false
     end
-
     local attributes = chest:GetAttributes()
     for attrName, attrValue in pairs(attributes) do
         if type(attrValue) == "boolean" and attrValue == true then
