@@ -1119,7 +1119,6 @@ local function hasChestOpenStateFlag(chest)
             end
         end
     end
-
     for _, descendant in ipairs(chest:GetDescendants()) do
         local lowerName = string.lower(descendant.Name)
         if chestOpenStateNames[lowerName] then
@@ -1135,7 +1134,6 @@ local function hasChestOpenStateFlag(chest)
 
     return false
 end
-
 local function isChestOpened(chest)
     if not chest or not chest.Parent then
         return true
@@ -1143,11 +1141,9 @@ local function isChestOpened(chest)
     if shouldIgnoreChest(chest) then
         return true
     end
-
     if hasChestOpenStateFlag(chest) then
         return true
     end
-
     local hasEnabledPrompt, hasAnyPrompt = hasEnabledChestPrompt(chest)
     if hasAnyPrompt and not hasEnabledPrompt then
         if dungeonState.chestPromptWasEnabled[chest] == true then
@@ -8467,7 +8463,6 @@ _G.__ZexonFluentUiBuildOk, _G.__ZexonFluentUiBuildError = pcall(function()
         Duration = 3.2
     })
 end)
-
 if _G.__ZexonFluentUiBuildOk ~= true then
     reportUiBuildError(_G.__ZexonFluentUiBuildError)
     pcall(function()
