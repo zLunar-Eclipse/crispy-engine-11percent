@@ -1131,7 +1131,6 @@ local function hasChestOpenStateFlag(chest)
             end
         end
     end
-
     return false
 end
 local function isChestOpened(chest)
@@ -1149,12 +1148,10 @@ local function isChestOpened(chest)
         if dungeonState.chestPromptWasEnabled[chest] == true then
             return true
         end
-
         local key = getChestKey(chest)
         if key and dungeonState.chestOpenedKeys[key] == true then
             return true
         end
-
         local attempts = tonumber(dungeonState.chestAttempts[chest]) or 0
         if key then
             attempts = math.max(attempts, tonumber(dungeonState.chestAttempts[key]) or 0)
@@ -1162,10 +1159,8 @@ local function isChestOpened(chest)
         if attempts >= 2 then
             return true
         end
-
         return false
     end
-
     ensureChestBaseline(chest)
     local baseline = dungeonState.chestBaselines[chest]
     local currentPivot = getChestLidPivot(chest)
