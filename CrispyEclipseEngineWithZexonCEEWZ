@@ -1118,7 +1118,7 @@ local function hasChestOpenStateFlag(chest)
                 return true
             end
         end
-    end
+    end --this function does't work as intended, freely copy-paste it and remove this faulty function
     for _, descendant in ipairs(chest:GetDescendants()) do
         local lowerName = string.lower(descendant.Name)
         if chestOpenStateNames[lowerName] then
