@@ -1,0 +1,561 @@
+--[[ ROTD Stable + Raid Detection + Fire Rate Slider ]]
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- ===== FEATURE TOGGLES =====
+local AutoFarmEnabled = false
+local KillAuraEnabled = false
+local HeliKillAuraEnabled = false
+
+-- ===== AUTO FARM SETTINGS =====
+local UndergroundDepth = 48
+local MoveSpeed = 0.92
+
+-- ===== KILL AURA SETTINGS =====
+local KillRange = 50
+local KillAuraCD = 0
+local KILL_AURA_BASE_COOLDOWN = 0.03   -- Default (will be overridden by raid detection)
+local MIN_COOLDOWN = 0.03
+local MAX_COOLDOWN = 0.20
+local LastTargetUpdate = 0
+local LastBanditScan = 0
+
+-- ===== HELICOPTER KILL AURA SETTINGS =====
+local HeliLastShot = 0
+
+-- ===== BARRICADE SETTINGS (Integrated into Kill Aura) =====
+local BarricadeRange = 30
+local BarricadeHitCD = 0.15
+local LastBarricadeHit = 0
+local BarricadeScanInterval = 0.1
+local LastBarricadeScan = 0
+local CachedBarricades = {}
+
+-- ===== BARRICADE NAMES (SMART FILTERS) =====
+local BarricadeNames = {
+    ["Plank"]   = { exact = true },
+    ["BaseRock"]= { exact = true },
+    ["clipBox"] = { exact = true },
+    ["Clip"]    = { exact = true },
+    ["Debris"]  = { exact = true },
+    ["Part"]    = { 
+        exact = true,
+        requireHealth = true,
+        requireAnchored = true
+    },
+}
+-- ==========================================
+
+-- ===== RAID DETECTION =====
+local PlaceId = game.PlaceId
+local RaidSettings = {
+    [6570550977] = { Name = "Railways", FireRatePreset = 0.10 },
+    [4672930500] = { Name = "Office",   FireRatePreset = 0.08 },
+    [5515514657] = { Name = "Tombs",    FireRatePreset = 0.12 },
+    [3473383899] = { Name = "Factory",  FireRatePreset = 0.08 },
+}
+local CurrentRaid = RaidSettings[PlaceId]
+if CurrentRaid then
+    print("📍 Raid detected: " .. CurrentRaid.Name)
+    KILL_AURA_BASE_COOLDOWN = CurrentRaid.FireRatePreset or 0.03
+else
+    print("🌍 Open world detected. Using default fire rate.")
+end
+
+local LastSurfacePosition = nil
+local cachedEntityFolder = nil
+local renderConnection = nil
+
+-- ===== HELPER FUNCTIONS =====
+local function GetToolModel(character)
+    if not character then return nil end
+    for _, obj in ipairs(character:GetChildren()) do
+        if obj:IsA("Model") and obj:GetAttribute("StorageItemId") then
+            return obj
+        end
+    end
+    return character:FindFirstChildWhichIsA("Model")
+end
+
+local function GetBulletOrigin(tool)
+    if not tool then return nil end
+    local handle = tool:FindFirstChild("Handle")
+    if handle then
+        return handle:FindFirstChild("BulletOrigin") or handle
+    end
+    return nil
+end
+
+local function isValidBarricade(part)
+    local config = BarricadeNames[part.Name]
+    if not config then return false end
+    if config.exact and not config.requireHealth and not config.requireAnchored then
+        return true
+    end
+    if config.requireHealth then
+        local hasHealth = part:FindFirstChild("Health") or part:FindFirstChild("HP")
+        if not hasHealth then return false end
+    end
+    if config.requireAnchored then
+        if not part.Anchored then return false end
+    end
+    return true
+end
+
+-- ===== GUI SETUP =====
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 280, 0, 55)
+MainFrame.Position = UDim2.new(1, -310, 0, 30)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local TitleBtn = Instance.new("TextButton")
+TitleBtn.Size = UDim2.new(1, 0, 1, 0)
+TitleBtn.BackgroundTransparency = 1
+TitleBtn.Text = "ROTD FARM ▼"
+TitleBtn.TextColor3 = Color3.fromRGB(0, 128, 0)
+TitleBtn.TextScaled = true
+TitleBtn.Font = Enum.Font.GothamBlack
+TitleBtn.Parent = MainFrame
+
+local dragging = false
+local dragStart, startPos
+TitleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+TitleBtn.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+TitleBtn.InputEnded:Connect(function() dragging = false end)
+
+local DropdownFrame = Instance.new("Frame")
+DropdownFrame.Size = UDim2.new(1, 0, 0, 360)  -- Increased height for fire rate slider
+DropdownFrame.Position = UDim2.new(0, 0, 1, 5)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+DropdownFrame.BorderSizePixel = 0
+DropdownFrame.Visible = false
+DropdownFrame.Parent = MainFrame
+Instance.new("UICorner", DropdownFrame).CornerRadius = UDim.new(0, 12)
+
+local AutoFarmBtn = Instance.new("TextButton")
+AutoFarmBtn.Size = UDim2.new(0.9, 0, 0, 40)
+AutoFarmBtn.Position = UDim2.new(0.05, 0, 0, 10)
+AutoFarmBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+AutoFarmBtn.Text = "AUTO FARM: OFF"
+AutoFarmBtn.TextColor3 = Color3.new(1,1,1)
+AutoFarmBtn.TextScaled = true
+AutoFarmBtn.Font = Enum.Font.GothamBold
+AutoFarmBtn.Parent = DropdownFrame
+Instance.new("UICorner", AutoFarmBtn).CornerRadius = UDim.new(0, 8)
+
+local KillAuraBtn = Instance.new("TextButton")
+KillAuraBtn.Size = UDim2.new(0.9, 0, 0, 40)
+KillAuraBtn.Position = UDim2.new(0.05, 0, 0, 60)
+KillAuraBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+KillAuraBtn.Text = "KILL AURA: OFF"
+KillAuraBtn.TextColor3 = Color3.new(1,1,1)
+KillAuraBtn.TextScaled = true
+KillAuraBtn.Font = Enum.Font.GothamBold
+KillAuraBtn.Parent = DropdownFrame
+Instance.new("UICorner", KillAuraBtn).CornerRadius = UDim.new(0, 8)
+
+local HeliBtn = Instance.new("TextButton")
+HeliBtn.Size = UDim2.new(0.9, 0, 0, 40)
+HeliBtn.Position = UDim2.new(0.05, 0, 0, 110)
+HeliBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+HeliBtn.Text = "HELI KILL AURA: OFF"
+HeliBtn.TextColor3 = Color3.new(1,1,1)
+HeliBtn.TextScaled = true
+HeliBtn.Font = Enum.Font.GothamBold
+HeliBtn.Parent = DropdownFrame
+Instance.new("UICorner", HeliBtn).CornerRadius = UDim.new(0, 8)
+
+local RangeLabel = Instance.new("TextLabel")
+RangeLabel.Size = UDim2.new(0.9, 0, 0, 25)
+RangeLabel.Position = UDim2.new(0.05, 0, 0, 160)
+RangeLabel.BackgroundTransparency = 1
+RangeLabel.Text = "Kill Aura Range: 50"
+RangeLabel.TextColor3 = Color3.new(1,1,1)
+RangeLabel.TextScaled = true
+RangeLabel.Font = Enum.Font.GothamBold
+RangeLabel.Parent = DropdownFrame
+
+local RangeBox = Instance.new("TextBox")
+RangeBox.Size = UDim2.new(0.9, 0, 0, 30)
+RangeBox.Position = UDim2.new(0.05, 0, 0, 190)
+RangeBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+RangeBox.Text = "50"
+RangeBox.TextColor3 = Color3.new(1,1,1)
+RangeBox.TextScaled = true
+RangeBox.Font = Enum.Font.GothamBold
+RangeBox.Parent = DropdownFrame
+Instance.new("UICorner", RangeBox).CornerRadius = UDim.new(0, 8)
+
+-- Fire Rate Label
+local FireRateLabel = Instance.new("TextLabel")
+FireRateLabel.Size = UDim2.new(0.9, 0, 0, 20)
+FireRateLabel.Position = UDim2.new(0.05, 0, 0, 230)
+FireRateLabel.BackgroundTransparency = 1
+FireRateLabel.Text = "Fire Speed: " .. string.format("%.2f", KILL_AURA_BASE_COOLDOWN) .. "s"
+FireRateLabel.TextColor3 = Color3.new(1,1,1)
+FireRateLabel.Font = Enum.Font.Gotham
+FireRateLabel.TextSize = 12
+FireRateLabel.Parent = DropdownFrame
+
+local FireRateBox = Instance.new("TextBox")
+FireRateBox.Size = UDim2.new(0.9, 0, 0, 30)
+FireRateBox.Position = UDim2.new(0.05, 0, 0, 250)
+FireRateBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+FireRateBox.Text = tostring(KILL_AURA_BASE_COOLDOWN)
+FireRateBox.TextColor3 = Color3.new(1,1,1)
+FireRateBox.Font = Enum.Font.Code
+FireRateBox.TextSize = 14
+FireRateBox.Parent = DropdownFrame
+Instance.new("UICorner", FireRateBox).CornerRadius = UDim.new(0, 6)
+
+local BreakBtn = Instance.new("TextButton")
+BreakBtn.Size = UDim2.new(0.9, 0, 0, 30)
+BreakBtn.Position = UDim2.new(0.05, 0, 0, 290)
+BreakBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+BreakBtn.Text = "BREAK"
+BreakBtn.TextColor3 = Color3.new(1,1,1)
+BreakBtn.TextScaled = true
+BreakBtn.Font = Enum.Font.GothamBold
+BreakBtn.Parent = DropdownFrame
+Instance.new("UICorner", BreakBtn).CornerRadius = UDim.new(0, 10)
+
+TitleBtn.MouseButton1Click:Connect(function()
+    DropdownFrame.Visible = not DropdownFrame.Visible
+    TitleBtn.Text = DropdownFrame.Visible and "ROTD FARM ▲" or "ROTD FARM ▼"
+end)
+
+AutoFarmBtn.MouseButton1Click:Connect(function()
+    AutoFarmEnabled = not AutoFarmEnabled
+    AutoFarmBtn.Text = AutoFarmEnabled and "AUTO FARM: ON" or "AUTO FARM: OFF"
+    AutoFarmBtn.BackgroundColor3 = AutoFarmEnabled and Color3.fromRGB(0, 170, 80) or Color3.fromRGB(170, 0, 0)
+    if AutoFarmEnabled then
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            LastSurfacePosition = character.HumanoidRootPart.Position
+        end
+    else
+        if LastSurfacePosition then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local hrp = character.HumanoidRootPart
+                hrp.CFrame = CFrame.new(LastSurfacePosition)
+                hrp.Velocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end
+end)
+
+KillAuraBtn.MouseButton1Click:Connect(function()
+    KillAuraEnabled = not KillAuraEnabled
+    KillAuraBtn.Text = KillAuraEnabled and "KILL AURA: ON" or "KILL AURA: OFF"
+    KillAuraBtn.BackgroundColor3 = KillAuraEnabled and Color3.fromRGB(0, 170, 80) or Color3.fromRGB(170, 0, 0)
+end)
+
+HeliBtn.MouseButton1Click:Connect(function()
+    HeliKillAuraEnabled = not HeliKillAuraEnabled
+    HeliBtn.Text = HeliKillAuraEnabled and "HELI KILL AURA: ON" or "HELI KILL AURA: OFF"
+    HeliBtn.BackgroundColor3 = HeliKillAuraEnabled and Color3.fromRGB(0, 170, 80) or Color3.fromRGB(170, 0, 0)
+end)
+
+RangeBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local num = tonumber(RangeBox.Text)
+        if num then
+            KillRange = math.clamp(num, 10, 250)
+            RangeBox.Text = tostring(KillRange)
+            RangeLabel.Text = "Kill Aura Range: " .. KillRange
+        else
+            RangeBox.Text = tostring(KillRange)
+        end
+    end
+end)
+
+FireRateBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local newRate = tonumber(FireRateBox.Text)
+        if newRate then
+            KILL_AURA_BASE_COOLDOWN = math.clamp(newRate, MIN_COOLDOWN, MAX_COOLDOWN)
+        end
+        FireRateBox.Text = string.format("%.2f", KILL_AURA_BASE_COOLDOWN)
+        FireRateLabel.Text = "Fire Speed: " .. FireRateBox.Text .. "s"
+    end
+end)
+
+BreakBtn.MouseButton1Click:Connect(function()
+    AutoFarmEnabled = false
+    KillAuraEnabled = false
+    HeliKillAuraEnabled = false
+    if renderConnection then
+        renderConnection:Disconnect()
+        renderConnection = nil
+    end
+    ScreenGui:Destroy()
+end)
+
+-- ===== MAIN LOOP =====
+renderConnection = RunService.RenderStepped:Connect(function(delta)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    local hrp = character.HumanoidRootPart
+    local tool = GetToolModel(character)
+
+    local closest = nil
+    local shortest = math.huge
+    local isBanditTarget = false
+    local targetType = "NPC"
+
+    -- ===== TARGET SCANNING (Unified: NPCs + Barricades) =====
+    if tick() - LastTargetUpdate > 0.12 then
+        LastTargetUpdate = tick()
+        
+        if not cachedEntityFolder then
+            cachedEntityFolder = Workspace:FindFirstChild("Entity")
+        end
+        if cachedEntityFolder then
+            for _, v in ipairs(cachedEntityFolder:GetChildren()) do
+                if v:FindFirstChild("Head") then
+                    local nameLower = v.Name:lower()
+                    local isValid = false
+                    if v:FindFirstChild("Zombie") then 
+                        isValid = true
+                    elseif nameLower:find("hector") or v.Name == "Hector Shot" or v.Name == "HectorShot" then 
+                        isValid = true
+                    elseif nameLower:find("klyde") or v.Name == "Klyde" then 
+                        isValid = true
+                    elseif nameLower:find("karl") or v.Name == "Karl" then 
+                        isValid = true
+                    elseif v.Name == "ZomborgPrime" or nameLower:find("zomborg") then 
+                        isValid = true
+                    end
+                    if isValid then
+                        local hum = v:FindFirstChild("Humanoid") or v:FindFirstChildWhichIsA("Humanoid")
+                        if hum and hum.Health > 0 then
+                            local dist = (v.Head.Position - hrp.Position).Magnitude
+                            if dist < shortest then
+                                shortest = dist
+                                closest = v
+                                isBanditTarget = false
+                                targetType = "NPC"
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if (tick() - LastBanditScan > 0.5) then
+            LastBanditScan = tick()
+            local function EvaluateBandit(obj)
+                local hum = obj:FindFirstChild("Humanoid") or obj:FindFirstChildWhichIsA("Humanoid")
+                local head = obj:FindFirstChild("Head")
+                if hum and hum.Health > 0 and head then
+                    local dist = (head.Position - hrp.Position).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = obj
+                        isBanditTarget = true
+                        targetType = "NPC"
+                    end
+                end
+            end
+            local checked = false
+            for _, obj in ipairs(Workspace:GetChildren()) do
+                if obj:IsA("Model") and obj.Name == "Bandit" then
+                    EvaluateBandit(obj)
+                    checked = true
+                end
+            end
+            if cachedEntityFolder then
+                for _, obj in ipairs(cachedEntityFolder:GetChildren()) do
+                    if obj:IsA("Model") and obj.Name == "Bandit" then
+                        EvaluateBandit(obj)
+                        checked = true
+                    end
+                end
+            end
+            if not checked then
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("Model") and obj.Name == "Bandit" then
+                        EvaluateBandit(obj)
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Barricade scan
+        if KillAuraEnabled then
+            if tick() - LastBarricadeScan > BarricadeScanInterval then
+                table.clear(CachedBarricades)
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("BasePart") and obj.Parent then
+                        if isValidBarricade(obj) then
+                            table.insert(CachedBarricades, obj)
+                        end
+                    end
+                end
+                LastBarricadeScan = tick()
+            end
+            
+            for _, obj in ipairs(CachedBarricades) do
+                if obj.Parent then
+                    local dist = (obj.Position - hrp.Position).Magnitude
+                    if dist < shortest and dist <= BarricadeRange then
+                        shortest = dist
+                        closest = obj
+                        targetType = "Barricade"
+                    end
+                end
+            end
+        end
+    end
+
+    -- ===== AUTO FARM MOVEMENT =====
+    if AutoFarmEnabled and closest and targetType == "NPC" and closest:FindFirstChild("Head") then
+        local targetHead = closest.Head
+        local targetPos = targetHead.Position - Vector3.new(0, UndergroundDepth, 0)
+        local currentPos = hrp.Position
+        local newPos = Vector3.new(
+            currentPos.X + (targetPos.X - currentPos.X) * MoveSpeed,
+            targetPos.Y,
+            currentPos.Z + (targetPos.Z - currentPos.Z) * MoveSpeed
+        )
+        hrp.CFrame = CFrame.new(newPos)
+        hrp.Velocity = Vector3.new(0, 0, 0)
+    elseif AutoFarmEnabled then
+        local safeY = -UndergroundDepth + 10
+        hrp.CFrame = CFrame.new(hrp.Position.X, safeY, hrp.Position.Z)
+        hrp.Velocity = Vector3.new(0, 0, 0)
+    end
+
+    -- ===== UNIFIED KILL AURA (NPCs + Barricades) =====
+    KillAuraCD = KillAuraCD + delta
+    if KillAuraEnabled and KillAuraCD > KILL_AURA_BASE_COOLDOWN and closest and tool then
+        if targetType == "NPC" then
+            KillAuraCD = 0
+            local targetHead = closest:FindFirstChild("Head")
+            if targetHead then
+                local finalTargetPart = targetHead
+                if closest.Name == "ZomborgPrime" or closest.Name:lower():find("zomborg") then
+                    local powerSource = closest:FindFirstChild("PowerSource")
+                    if powerSource then
+                        if powerSource.Color.R < 0.3 and powerSource.Color.G < 0.3 and powerSource.Color.B < 0.3 then
+                            finalTargetPart = targetHead
+                        else
+                            finalTargetPart = powerSource
+                        end
+                    end
+                end
+                local targetHum = isBanditTarget and (closest:FindFirstChild("Humanoid") or closest:FindFirstChildWhichIsA("Humanoid")) 
+                                   or closest:FindFirstChild("Zombie") 
+                                   or closest:FindFirstChild("Humanoid") 
+                                   or closest:FindFirstChildWhichIsA("Humanoid")
+                if targetHum and (finalTargetPart.Position - hrp.Position).Magnitude <= KillRange then
+                    local storageId = tool:GetAttribute("StorageItemId") or tool.Name
+                    local bulletOrigin = GetBulletOrigin(tool) or hrp
+                    ReplicatedStorage.Library.RemotesManager.PrimaryFire:FireServer(
+                        storageId, tool,
+                        {
+                            ["ShotPoint"] = hrp.CFrame.Position,
+                            ["Direction"] = (finalTargetPart.Position - hrp.CFrame.Position).Unit,
+                            ["AmmoData"] = {["MaxAmmo"] = 999, ["Ammo"] = 999},
+                            ["TracerColor"] = Color3.new(1,1,1),
+                            ["ShotId"] = 1,
+                            ["HitInfoList"] = {{["Normal"] = Vector3.new(0,1,0), ["Part"] = finalTargetPart, ["Position"] = finalTargetPart.Position}},
+                            ["ShotOrigin"] = bulletOrigin,
+                            ["Victims"] = {{["Humanoid"] = targetHum, ["Object"] = finalTargetPart}},
+                            ["TargetPoints"] = {finalTargetPart.Position}
+                        }
+                    )
+                end
+            end
+        elseif targetType == "Barricade" then
+            if tick() - LastBarricadeHit > BarricadeHitCD then
+                LastBarricadeHit = tick()
+                local storageId = tool:GetAttribute("StorageItemId") or tool.Name
+                local bulletOrigin = GetBulletOrigin(tool) or hrp
+                ReplicatedStorage.Library.RemotesManager.PrimaryFire:FireServer(
+                    storageId, tool,
+                    {
+                        ["ShotPoint"] = hrp.CFrame.Position,
+                        ["Direction"] = (closest.Position - hrp.CFrame.Position).Unit,
+                        ["AmmoData"] = {["MaxAmmo"] = 999, ["Ammo"] = 999},
+                        ["TracerColor"] = Color3.new(1,1,1),
+                        ["ShotId"] = 1,
+                        ["HitInfoList"] = {{["Normal"] = Vector3.new(0,1,0), ["Part"] = closest, ["Position"] = closest.Position}},
+                        ["ShotOrigin"] = bulletOrigin,
+                        ["Victims"] = {{["Humanoid"] = nil, ["Object"] = closest}},
+                        ["TargetPoints"] = {closest.Position}
+                    }
+                )
+            end
+        end
+    end
+
+    -- ===== HELICOPTER KILL AURA =====
+    if HeliKillAuraEnabled and tool and tick() - HeliLastShot > 0.18 then
+        local entityFolder = cachedEntityFolder or Workspace:FindFirstChild("Entity")
+        cachedEntityFolder = entityFolder
+        if entityFolder then
+            local bestPart = nil
+            local bestDist = math.huge
+            for _, pilot in ipairs(entityFolder:GetChildren()) do
+                if pilot.Name == "Bandit Pilot" then
+                    for _, part in ipairs(pilot:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            local dist = (part.Position - hrp.Position).Magnitude
+                            if dist < 300 and dist < bestDist then
+                                bestDist = dist
+                                bestPart = part
+                            end
+                        end
+                    end
+                end
+            end
+            if bestPart then
+                local storageId = tool:GetAttribute("StorageItemId") or tool.Name
+                local bulletOrigin = GetBulletOrigin(tool) or hrp
+                ReplicatedStorage.Library.RemotesManager.PrimaryFire:FireServer(
+                    storageId, tool,
+                    {
+                        ["ShotPoint"] = hrp.CFrame.Position,
+                        ["Direction"] = (bestPart.Position - hrp.CFrame.Position).Unit,
+                        ["AmmoData"] = {["MaxAmmo"] = 999, ["Ammo"] = 999},
+                        ["TracerColor"] = Color3.new(1,1,1),
+                        ["ShotId"] = 1,
+                        ["HitInfoList"] = {{["Normal"] = Vector3.new(0,1,0), ["Part"] = bestPart, ["Position"] = bestPart.Position}},
+                        ["ShotOrigin"] = bulletOrigin,
+                        ["Victims"] = {{["Humanoid"] = nil, ["Object"] = bestPart}},
+                        ["TargetPoints"] = {bestPart.Position}
+                    }
+                )
+                HeliLastShot = tick()
+            end
+        end
+    end
+end)
+
+print("ROTD Stable Loaded. Raid detection + fire rate slider active.")
